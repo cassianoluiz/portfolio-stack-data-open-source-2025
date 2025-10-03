@@ -1,9 +1,8 @@
 #!/bin/bash
 
 # ===============================================
-# Script de Setup - Stack de Dados para Portf贸lio
+# Script de Setup - Stack de Dados para Portfolio
 # ===============================================
-
 echo "Criando Stack de Dados para Portfolio..."
 echo ""
 
