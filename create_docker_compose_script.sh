@@ -1,18 +1,18 @@
 #!/bin/bash
 
 # ===============================================
-# Script de Setup - Stack de Dados para Portfólio
+# Script de Setup - Stack de Dados para Portf贸lio
 # ===============================================
 
-echo "🚀 Criando Stack de Dados para Portfólio..."
+echo "Criando Stack de Dados para Portfolio..."
 echo ""
 
-# Criar diretório do projeto
+# Criar diretorio do projeto
 mkdir -p data-stack-portfolio
 cd data-stack-portfolio
 
-# Criar estrutura de diretórios
-echo "📁 Criando estrutura de diretórios..."
+# Criar estrutura de direterios
+echo "Criando estrutura de direterios..."
 mkdir -p dagster_home/{storage,logs}
 mkdir -p pipelines
 mkdir -p scripts
@@ -20,7 +20,7 @@ mkdir -p data/{raw,processed,duckdb}
 mkdir -p dbt_project/{models,seeds,macros,tests}
 
 # Criar arquivo .env
-echo "⚙️  Criando arquivo .env..."
+echo " Criando arquivo .env..."
 cat > .env << 'EOF'
 # PostgreSQL Configuration
 POSTGRES_USER=datauser
@@ -34,7 +34,7 @@ MINIO_ROOT_PASSWORD=minioadmin123
 EOF
 
 # Criar docker-compose.yml
-echo "🐋 Criando docker-compose.yml..."
+echo " Criando docker-compose.yml..."
 cat > docker-compose.yml << 'EOF'
 version: '3.8'
 
@@ -80,14 +80,14 @@ services:
       /usr/bin/mc mb myminio/raw --ignore-existing;
       /usr/bin/mc mb myminio/processed --ignore-existing;
       /usr/bin/mc mb myminio/landing --ignore-existing;
-      echo '✅ MinIO configurado!';
+      echo '鉁?MinIO configurado!';
       exit 0;
       "
     networks:
       - data_network
 
   # ============================================
-  # INGESTÃO - Airbyte
+  # INGEST脙O - Airbyte
   # ============================================
   
   airbyte-server:
@@ -175,7 +175,7 @@ services:
     restart: unless-stopped
 
   # ============================================
-  # ORQUESTRAÇÃO - Dagster
+  # ORQUESTRACAO - Dagster
   # ============================================
   
   dagster:
@@ -298,7 +298,7 @@ services:
       - monitoring
 
   # ============================================
-  # UTILITÁRIOS
+  # UTILITARIOS
   # ============================================
   
   dbt:
@@ -357,7 +357,7 @@ networks:
 EOF
 
 # Criar arquivo .gitignore
-echo "📝 Criando .gitignore..."
+echo "Criando .gitignore..."
 cat > .gitignore << 'EOF'
 # Environment
 .env
@@ -399,8 +399,8 @@ dbt_project/logs/
 *.swo
 EOF
 
-# Criar configuração do Dagster
-echo "⚙️  Criando configuração do Dagster..."
+# Criar configurao do Dagster
+echo "Criando configuracao do Dagster..."
 cat > dagster_home/dagster.yaml << 'EOF'
 run_coordinator:
   module: dagster.core.run_coordinator
@@ -418,10 +418,10 @@ compute_logs:
 EOF
 
 # Criar exemplo de pipeline Dagster
-echo "🔧 Criando pipeline de exemplo..."
+echo "Criando pipeline de exemplo..."
 cat > pipelines/example_pipeline.py << 'EOF'
 """
-Pipeline de exemplo para o portfólio
+Pipeline de exemplo para o portf贸lio
 """
 from dagster import asset, Definitions, ScheduleDefinition, define_asset_job
 import pandas as pd
@@ -460,7 +460,7 @@ def processed_data():
 
 @asset(deps=[processed_data], description="Métricas agregadas")
 def metrics():
-    """Calcula métricas de negócio"""
+    """Calcula métricas de negocio"""
     df = pd.read_csv('/opt/dagster/data/processed/vendas_processado.csv')
     
     metrics = {
@@ -478,13 +478,13 @@ pipeline_job = define_asset_job(
     selection=[raw_data, processed_data, metrics]
 )
 
-# Schedule diário
+# Schedule diario
 daily_schedule = ScheduleDefinition(
     job=pipeline_job,
     cron_schedule="0 2 * * *",  # 2h AM todo dia
 )
 
-# Exportar definições
+# Exportar definicoes
 defs = Definitions(
     assets=[raw_data, processed_data, metrics],
     jobs=[pipeline_job],
@@ -493,7 +493,7 @@ defs = Definitions(
 EOF
 
 # Criar script Python de exemplo
-echo "🐍 Criando script Python de exemplo..."
+echo "Criando script Python de exemplo..."
 cat > scripts/test_minio.py << 'EOF'
 """
 Script para testar conexão com MinIO
@@ -511,12 +511,12 @@ s3 = boto3.client(
 )
 
 def test_connection():
-    """Testa conexão com MinIO"""
+    """Testa conex茫o com MinIO"""
     try:
         # Listar buckets
         response = s3.list_buckets()
-        print("✅ Conexão com MinIO OK!")
-        print(f"📦 Buckets: {[b['Name'] for b in response['Buckets']]}")
+        print("鉁?Conex茫o com MinIO OK!")
+        print(f" Buckets: {[b['Name'] for b in response['Buckets']]}")
         
         # Upload teste
         test_content = f"Teste em {datetime.now()}"
@@ -525,11 +525,11 @@ def test_connection():
             Key='test.txt',
             Body=test_content.encode()
         )
-        print("✅ Upload de teste realizado!")
+        print("鉁?Upload de teste realizado!")
         
         return True
     except Exception as e:
-        print(f"❌ Erro: {e}")
+        print(f"Erro: {e}")
         return False
 
 if __name__ == "__main__":
@@ -537,22 +537,22 @@ if __name__ == "__main__":
 EOF
 
 # Criar README
-echo "📖 Criando README.md..."
+echo " Criando README.md..."
 cat > README.md << 'EOF'
-# 🚀 Stack de Engenharia de Dados - Portfólio
+# Stack de Engenharia de Dados - Portf贸lio
 
 Stack completa e moderna de Data Engineering com ferramentas open-source.
 
-## 🏗️ Arquitetura
+## Arquitetura
 
 - **MinIO**: Data Lake (S3-compatible)
-- **Airbyte**: Ingestão de dados (350+ conectores)
-- **Dagster**: Orquestração de pipelines
+- **Airbyte**: Ingest茫o de dados (350+ conectores)
+- **Dagster**: Orquestrao de pipelines
 - **dbt**: Transformações SQL
 - **Metabase**: Business Intelligence
 - **PostgreSQL**: Metadados (externo)
 
-## 🚀 Como Usar
+## Como Usar
 
 ### 1. Preparar PostgreSQL
 
@@ -593,13 +593,13 @@ docker-compose down
 - **Metabase**: http://localhost:3001
 - **MinIO**: http://localhost:9001
 
-## 📊 Recursos
+## Recursos
 
 - RAM: ~5.5GB
 - CPU: 3.5 cores
 - Disco: ~10GB
 
-## 🛠️ Comandos Úteis
+## Comandos úteis
 
 ```bash
 # Subir com ferramentas adicionais
@@ -618,25 +618,10 @@ docker-compose exec python-worker python /scripts/test_minio.py
 docker-compose ps
 ```
 
-## 📚 Estrutura
 
-```
-.
-├── docker-compose.yml
-├── .env
-├── dagster_home/
-│   └── dagster.yaml
-├── pipelines/
-│   └── example_pipeline.py
-├── scripts/
-│   └── test_minio.py
-├── data/
-│   ├── raw/
-│   └── processed/
-└── dbt_project/
-```
 
-## 📝 Licença
+
+## Licença
 
 MIT
 EOF
@@ -647,27 +632,27 @@ touch data/processed/.gitkeep
 touch dagster_home/.gitkeep
 
 echo ""
-echo "✅ Setup completo!"
+echo "Setup completo!"
 echo ""
-echo "📋 Próximos passos:"
+echo "Próximos passos:"
 echo ""
 echo "1. Ajustar credenciais PostgreSQL no arquivo .env"
 echo "2. Subir a stack: docker-compose up -d"
-echo "3. Aguardar ~2 minutos para inicialização"
+echo "3. Aguardar ~2 minutos para inicializao"
 echo "4. Acessar interfaces:"
 echo "   - Airbyte: http://localhost:8000"
 echo "   - Dagster: http://localhost:3000"
 echo "   - Metabase: http://localhost:3001"
 echo "   - MinIO: http://localhost:9001"
 echo ""
-echo "📖 Leia o README.md para mais informações"
+echo "Leia o README.md para mais informações"
 echo ""
-echo "🎉 Bom trabalho com seu portfólio!"
+echo "Bom trabalho com seu portfólio!"
 EOF
 
 chmod +x create-stack.sh
 echo ""
-echo "✅ Script criado com sucesso!"
+echo "Script criado com sucesso!"
 echo ""
 echo "Execute agora:"
 echo "  bash create-stack.sh"
