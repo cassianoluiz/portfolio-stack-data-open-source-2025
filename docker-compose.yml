@@ -68,6 +68,7 @@ services:
       - "8001:8001"
     mem_limit: 1g
     cpus: 1.0
+    # CORREÇÃO: extra_hosts como lista de mapeamento
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -110,6 +111,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     mem_limit: 1g
     cpus: 1.0
+    # CORREÇÃO: extra_hosts como lista de mapeamento
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -128,6 +130,7 @@ services:
       DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development.yaml
     mem_limit: 512m
     cpus: 0.5
+    # CORREÇÃO: extra_hosts como lista de mapeamento
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -163,6 +166,7 @@ services:
       minio:
         condition: service_healthy
     command: dagster-webserver -h 0.0.0.0 -p 3000
+    # CORREÇÃO: extra_hosts como lista de mapeamento
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -185,6 +189,7 @@ services:
     mem_limit: 512m
     cpus: 0.5
     command: dagster-daemon run
+    # CORREÇÃO: extra_hosts como lista de mapeamento
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -212,4 +217,110 @@ services:
       - "3001:3000"
     mem_limit: 1.5g
     cpus: 1.0
+    # CORREÇÃO: extra_hosts como lista de mapeamento (solução para o erro)
     extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - data_network
+    restart: unless-stopped
+
+  # ============================================
+  # MONITORAMENTO (Opcional)
+  # ============================================
+  
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: portfolio_grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3002:3000"
+    mem_limit: 256m
+    cpus: 0.5
+    networks:
+      - data_network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.0
+    container_name: portfolio_cadvisor
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports:
+      - "8080:8080"
+    mem_limit: 128m
+    cpus: 0.25
+    networks:
+      - data_network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # ============================================
+  # UTILITARIOS
+  # ============================================
+  
+  dbt:
+    image: ghcr.io/dbt-labs/dbt-postgres:1.7.0
+    container_name: portfolio_dbt
+    volumes:
+      - ./dbt_project:/usr/app
+      - ./data:/data
+    working_dir: /usr/app
+    mem_limit: 512m
+    cpus: 0.5
+    command: tail -f /dev/null
+    # CORREÇÃO: extra_hosts como lista de mapeamento
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - data_network
+    profiles:
+      - tools
+
+  python-worker:
+    image: python:3.11-slim
+    container_name: portfolio_python
+    environment:
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin123
+      AWS_ENDPOINT_URL: http://minio:9000
+    volumes:
+      - ./scripts:/scripts
+      - ./data:/data
+    working_dir: /scripts
+    mem_limit: 512m
+    cpus: 0.5
+    command: >
+      bash -c "
+      pip install -q boto3 pandas duckdb pyarrow requests psycopg2-binary sqlalchemy &&
+      tail -f /dev/null
+      "
+    # CORREÇÃO: extra_hosts como lista de mapeamento
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - data_network
+    profiles:
+      - tools
+
+volumes:
+  minio_data:
+  airbyte_data:
+  airbyte_workspace:
+  airbyte_local:
+  metabase_data:
+  grafana_data:
+
+networks:
+  data_network:
+    driver: bridge
