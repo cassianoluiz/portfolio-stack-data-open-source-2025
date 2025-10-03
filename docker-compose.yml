@@ -1,0 +1,318 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # DATA LAKE - MinIO
+  # ============================================
+  
+  minio:
+    image: minio/minio:latest
+    container_name: portfolio_minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+      MINIO_BROWSER_REDIRECT_URL: http://localhost:9001
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    command: server /data --console-address ":9001"
+    mem_limit: 512m
+    cpus: 0.5
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - data_network
+    restart: unless-stopped
+
+  minio-setup:
+    image: minio/mc:latest
+    container_name: portfolio_minio_setup
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin123;
+      /usr/bin/mc mb myminio/raw --ignore-existing;
+      /usr/bin/mc mb myminio/processed --ignore-existing;
+      /usr/bin/mc mb myminio/landing --ignore-existing;
+      echo '✅ MinIO configurado!';
+      exit 0;
+      "
+    networks:
+      - data_network
+
+  # ============================================
+  # INGESTÃO - Airbyte
+  # ============================================
+  
+  airbyte-server:
+    image: airbyte/server:0.50.0
+    container_name: portfolio_airbyte_server
+    environment:
+      DATABASE_USER: ${POSTGRES_USER:-datauser}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-datapass123}
+      DATABASE_HOST: ${POSTGRES_HOST:-host.docker.internal}
+      DATABASE_PORT: ${POSTGRES_PORT:-5432}
+      DATABASE_DB: airbyte
+      CONFIG_ROOT: /data
+      WORKSPACE_ROOT: /tmp/workspace
+    volumes:
+      - airbyte_data:/data
+      - airbyte_workspace:/tmp/workspace
+    ports:
+      - "8001:8001"
+    mem_limit: 1g
+    cpus: 1.0
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - data_network
+    restart: unless-stopped
+
+  airbyte-webapp:
+    image: airbyte/webapp:0.50.0
+    container_name: portfolio_airbyte_webapp
+    environment:
+      AIRBYTE_SERVER_HOST: airbyte-server
+      AIRBYTE_SERVER_PORT: 8001
+    ports:
+      - "8000:80"
+    mem_limit: 512m
+    cpus: 0.5
+    depends_on:
+      - airbyte-server
+    networks:
+      - data_network
+    restart: unless-stopped
+
+  airbyte-worker:
+    image: airbyte/worker:0.50.0
+    container_name: portfolio_airbyte_worker
+    environment:
+      DATABASE_USER: ${POSTGRES_USER:-datauser}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-datapass123}
+      DATABASE_HOST: ${POSTGRES_HOST:-host.docker.internal}
+      DATABASE_PORT: ${POSTGRES_PORT:-5432}
+      DATABASE_DB: airbyte
+      CONFIG_ROOT: /data
+      WORKSPACE_ROOT: /tmp/workspace
+      LOCAL_ROOT: /tmp/airbyte_local
+      AIRBYTE_SERVER_HOST: airbyte-server
+      AIRBYTE_SERVER_PORT: 8001
+    volumes:
+      - airbyte_workspace:/tmp/workspace
+      - airbyte_local:/tmp/airbyte_local
+      - /var/run/docker.sock:/var/run/docker.sock
+    mem_limit: 1g
+    cpus: 1.0
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - data_network
+    restart: unless-stopped
+
+  airbyte-temporal:
+    image: temporalio/auto-setup:1.20.0
+    container_name: portfolio_airbyte_temporal
+    environment:
+      DB: postgresql
+      DB_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_USER: ${POSTGRES_USER:-datauser}
+      POSTGRES_PWD: ${POSTGRES_PASSWORD:-datapass123}
+      POSTGRES_SEEDS: ${POSTGRES_HOST:-host.docker.internal}
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development.yaml
+    mem_limit: 512m
+    cpus: 0.5
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - data_network
+    restart: unless-stopped
+
+  # ============================================
+  # ORQUESTRACAO - Dagster
+  # ============================================
+  
+  dagster:
+    image: dagster/dagster:1.5.0
+    container_name: portfolio_dagster
+    environment:
+      DAGSTER_POSTGRES_USER: ${POSTGRES_USER:-datauser}
+      DAGSTER_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-datapass123}
+      DAGSTER_POSTGRES_DB: dagster
+      DAGSTER_POSTGRES_HOSTNAME: ${POSTGRES_HOST:-host.docker.internal}
+      DAGSTER_POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin123
+      AWS_ENDPOINT_URL: http://minio:9000
+    volumes:
+      - ./dagster_home:/opt/dagster/dagster_home
+      - ./pipelines:/opt/dagster/pipelines
+      - ./data:/opt/dagster/data
+    ports:
+      - "3000:3000"
+    mem_limit: 1g
+    cpus: 1.0
+    depends_on:
+      minio:
+        condition: service_healthy
+    command: dagster-webserver -h 0.0.0.0 -p 3000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - data_network
+    restart: unless-stopped
+
+  dagster-daemon:
+    image: dagster/dagster:1.5.0
+    container_name: portfolio_dagster_daemon
+    environment:
+      DAGSTER_POSTGRES_USER: ${POSTGRES_USER:-datauser}
+      DAGSTER_POSTGRES_PASSWORD: ${POSTS_PASSWORD:-datapass123}
+      DAGSTER_POSTGRES_DB: dagster
+      DAGSTER_POSTGRES_HOSTNAME: ${POSTGRES_HOST:-host.docker.internal}
+      DAGSTER_POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+    volumes:
+      - ./dagster_home:/opt/dagster/dagster_home
+      - ./pipelines:/opt/dagster/pipelines
+    mem_limit: 512m
+    cpus: 0.5
+    command: dagster-daemon run
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - data_network
+    restart: unless-stopped
+
+  # ============================================
+  # BI - Metabase
+  # ============================================
+  
+  metabase:
+    image: metabase/metabase:v0.48.0
+    container_name: portfolio_metabase
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: metabase
+      MB_DB_PORT: ${POSTGRES_PORT:-5432}
+      MB_DB_USER: ${POSTGRES_USER:-datauser}
+      MB_DB_PASS: ${POSTGRES_PASSWORD:-datapass123}
+      MB_DB_HOST: ${POSTGRES_HOST:-host.docker.internal}
+      JAVA_OPTS: "-Xmx1g"
+    volumes:
+      - metabase_data:/metabase-data
+    ports:
+      - "3001:3000"
+    mem_limit: 1.5g
+    cpus: 1.0
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - data_network
+    restart: unless-stopped
+
+  # ============================================
+  # MONITORAMENTO (Opcional)
+  # ============================================
+  
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: portfolio_grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3002:3000"
+    mem_limit: 256m
+    cpus: 0.5
+    networks:
+      - data_network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.0
+    container_name: portfolio_cadvisor
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports:
+      - "8080:8080"
+    mem_limit: 128m
+    cpus: 0.25
+    networks:
+      - data_network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # ============================================
+  # UTILITARIOS
+  # ============================================
+  
+  dbt:
+    image: ghcr.io/dbt-labs/dbt-postgres:1.7.0
+    container_name: portfolio_dbt
+    volumes:
+      - ./dbt_project:/usr/app
+      - ./data:/data
+    working_dir: /usr/app
+    mem_limit: 512m
+    cpus: 0.5
+    command: tail -f /dev/null
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - data_network
+    profiles:
+      - tools
+
+  python-worker:
+    image: python:3.11-slim
+    container_name: portfolio_python
+    environment:
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin123
+      AWS_ENDPOINT_URL: http://minio:9000
+    volumes:
+      - ./scripts:/scripts
+      - ./data:/data
+    working_dir: /scripts
+    mem_limit: 512m
+    cpus: 0.5
+    command: >
+      bash -c "
+      pip install -q boto3 pandas duckdb pyarrow requests psycopg2-binary sqlalchemy &&
+      tail -f /dev/null
+      "
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - data_network
+    profiles:
+      - tools
+
+volumes:
+  minio_data:
+  airbyte_data:
+  airbyte_workspace:
+  airbyte_local:
+  metabase_data:
+  grafana_data:
+
+networks:
+  data_network:
+    driver: bridge
