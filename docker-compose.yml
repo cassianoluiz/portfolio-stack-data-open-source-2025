@@ -141,60 +141,78 @@ services:
   # ORQUESTRACAO - Dagster
   # ============================================
   
-  dagster:
-    # CORREÇÃO: Usando a imagem correta do webserver/Dagit
-    image: dagster/dagster-webserver:1.5.0
-    container_name: portfolio_dagster
+  dagster-webserver:
+    image: dagster/dagster-webserver:1.7.0
+    container_name: portfolio_dagster_webserver
     environment:
       DAGSTER_POSTGRES_USER: ${POSTGRES_USER:-datauser}
       DAGSTER_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-datapass123}
       DAGSTER_POSTGRES_DB: dagster
-      DAGSTER_POSTGRES_HOSTNAME: ${POSTGRES_HOST:-host.docker.internal}
+      DAGSTER_POSTGRES_HOST: ${POSTGRES_HOST:-host.docker.internal}
       DAGSTER_POSTGRES_PORT: ${POSTGRES_PORT:-5432}
-      AWS_ACCESS_KEY_ID: minioadmin
-      AWS_SECRET_ACCESS_KEY: minioadmin123
-      AWS_ENDPOINT_URL: http://minio:9000
+      DAGSTER_HOME: /opt/dagster/dagster_home
     volumes:
       - ./dagster_home:/opt/dagster/dagster_home
       - ./pipelines:/opt/dagster/pipelines
-      - ./data:/opt/dagster/data
     ports:
       - "3000:3000"
     mem_limit: 1g
     cpus: 1.0
-    depends_on:
-      minio:
-        condition: service_healthy
-    command: dagster-webserver -h 0.0.0.0 -p 3000
-    # CORREÇÃO: extra_hosts como lista de mapeamento
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
       - data_network
     restart: unless-stopped
+    depends_on:
+      - dagster-user-code
 
   dagster-daemon:
-    # CORREÇÃO: Usando a imagem correta do daemon
-    image: dagster/dagster-daemon:1.5.0
+    image: dagster/dagster-daemon:1.7.0
     container_name: portfolio_dagster_daemon
     environment:
       DAGSTER_POSTGRES_USER: ${POSTGRES_USER:-datauser}
       DAGSTER_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-datapass123}
       DAGSTER_POSTGRES_DB: dagster
-      DAGSTER_POSTGRES_HOSTNAME: ${POSTGRES_HOST:-host.docker.internal}
+      DAGSTER_POSTGRES_HOST: ${POSTGRES_HOST:-host.docker.internal}
       DAGSTER_POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      DAGSTER_HOME: /opt/dagster/dagster_home
     volumes:
       - ./dagster_home:/opt/dagster/dagster_home
       - ./pipelines:/opt/dagster/pipelines
     mem_limit: 512m
     cpus: 0.5
-    command: dagster-daemon run
-    # CORREÇÃO: extra_hosts como lista de mapeamento
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
       - data_network
     restart: unless-stopped
+    depends_on:
+      - dagster-user-code
+
+  dagster-user-code:
+    image: dagster/user-code-example:1.7.0
+    container_name: portfolio_dagster_user_code
+    environment:
+      DAGSTER_POSTGRES_USER: ${POSTGRES_USER:-datauser}
+      DAGSTER_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-datapass123}
+      DAGSTER_POSTGRES_DB: dagster
+      DAGSTER_POSTGRES_HOST: ${POSTGRES_HOST:-host.docker.internal}
+      DAGSTER_CURRENT_IMAGE: dagster/user-code-example:1.7.0
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin123
+      AWS_ENDPOINT_URL: http://minio:9000
+    volumes:
+      - ./pipelines:/opt/dagster/app
+    mem_limit: 512m
+    cpus: 0.5
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - data_network
+    restart: unless-stopped
+    depends_on:
+      minio:
+        condition: service_healthy
 
   # ============================================
   # BI - Metabase
