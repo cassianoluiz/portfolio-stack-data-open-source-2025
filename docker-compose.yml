@@ -141,31 +141,6 @@ services:
   # ORQUESTRACAO - Dagster
   # ============================================
   
-  dagster-webserver:
-    image: dagster/dagster-webserver:1.7.0
-    container_name: portfolio_dagster_webserver
-    environment:
-      DAGSTER_POSTGRES_USER: ${POSTGRES_USER:-datauser}
-      DAGSTER_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-datapass123}
-      DAGSTER_POSTGRES_DB: dagster
-      DAGSTER_POSTGRES_HOST: ${POSTGRES_HOST:-host.docker.internal}
-      DAGSTER_POSTGRES_PORT: ${POSTGRES_PORT:-5432}
-      DAGSTER_HOME: /opt/dagster/dagster_home
-    volumes:
-      - ./dagster_home:/opt/dagster/dagster_home
-      - ./pipelines:/opt/dagster/pipelines
-    ports:
-      - "3000:3000"
-    mem_limit: 1g
-    cpus: 1.0
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    networks:
-      - data_network
-    restart: unless-stopped
-    depends_on:
-      - dagster-user-code
-
   dagster-daemon:
     image: dagster/dagster-daemon:1.7.0
     container_name: portfolio_dagster_daemon
