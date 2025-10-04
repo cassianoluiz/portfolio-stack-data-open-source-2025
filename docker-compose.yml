@@ -81,6 +81,8 @@ services:
     environment:
       AIRBYTE_SERVER_HOST: airbyte-server
       AIRBYTE_SERVER_PORT: 8001
+      INTERNAL_API_HOST: airbyte-server:8001
+      API_URL: /api/v1/
     ports:
       - "8000:80"
     mem_limit: 512m
